@@ -1,0 +1,7 @@
+1. Attack the superblock
+  
+2. Block with more than one inode
+
+3. Corrupt permission
+
+4. Orphan inodes
