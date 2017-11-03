@@ -35,10 +35,16 @@ void superblock_fix( int fd ){
   
 }
 
+static void read_inode( int fd, int inode_no, const ext2_group_desc * group, struct ext2_inode * inode) {
+  lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + (inode_no)*sizeof(struct ext2_inode), SEEK_SET);
+  read(fd, inode, sizeof(struct ext2_inode));
+
+}
+
 void multiple_inode( int fd ) {
   struct ext2_super_block super;
   struct ext2_group_desc group_descr;
-  struct ext2_inode inode;
+  struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
 
   lseek(fd, BASE_OFFSET, SEEK_SET);
   read(fd, &super, sizeof(super));
@@ -62,13 +68,6 @@ void multiple_inode( int fd ) {
   lseek( fd, BLOCK_OFFSET(inode_bitmap), SEEK_SET);
   read( fd, bitmap, sizeof(bitmap));
 
-  for( int i = 0; i < block_size; i++){
-    for( int bit = 0; i < 8; i++) {
-      if( bitmapGet(bitmap[i], bit) ) {
-         
-      }
-    }
-  }
 
 }
 
