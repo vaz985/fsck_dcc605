@@ -35,16 +35,18 @@ void superblock_fix( int fd ){
   
 }
 
-static void read_inode( int fd, int inode_no, const ext2_group_desc * group, struct ext2_inode * inode) {
-  lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + (inode_no)*sizeof(struct ext2_inode), SEEK_SET);
-  read(fd, inode, sizeof(struct ext2_inode));
-
-}
+//static void read_inode( int fd, int inode_no, const ext2_group_desc * group, struct ext2_inode * inode) {
+//  unsigned int block_size = 1024;
+//
+//  lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + (inode_no)*sizeof(struct ext2_inode), SEEK_SET);
+//  read(fd, inode, sizeof(struct ext2_inode));
+//  
+//}
 
 void multiple_inode( int fd ) {
   struct ext2_super_block super;
-  struct ext2_group_desc group_descr;
-  struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
+  struct ext2_group_desc  group;
+  struct ext2_group_desc  group2;
 
   lseek(fd, BASE_OFFSET, SEEK_SET);
   read(fd, &super, sizeof(super));
@@ -59,14 +61,28 @@ void multiple_inode( int fd ) {
   unsigned int itable_blocks = super.s_inodes_per_group / inodes_per_block;
 
   lseek( fd, BASE_OFFSET + block_size, SEEK_SET);
-  read( fd, &group_descr, sizeof(struct ext2_group_desc));
+  read( fd, &group, sizeof(struct ext2_group_desc));
 
-  unsigned int inode_bitmap = group_descr.bg_inode_bitmap;
-  unsigned int inode_table  = group_descr.bg_inode_table;
+  unsigned int inode_bitmap = group.bg_inode_bitmap;
+  unsigned int inode_table  = group.bg_inode_table;
   
-  unsigned char *bitmap = malloc(block_size);
-  lseek( fd, BLOCK_OFFSET(inode_bitmap), SEEK_SET);
-  read( fd, bitmap, sizeof(bitmap));
+  unsigned char *bitmap      = malloc(block_size);
+  unsigned char *block_count = calloc(block_size, sizeof(unsigned char));
+
+  lseek(fd, BLOCK_OFFSET(inode_bitmap), SEEK_SET);
+  read(fd, bitmap, sizeof(bitmap));
+
+  struct ext2_inode * inode = malloc( sizeof(struct ext2_inode) );
+  //read_inode( fd, 1, &group, inode);
+
+  //for(int i = 0; i < 1024; i++) {
+  //  if( bitmap[i] > 0 ) {
+  //    for(int j = 0; j < 8; j++) {
+
+  //    }
+  //  }
+  //  printf("Bloco: %d\n", i);
+  //}
 
 
 }

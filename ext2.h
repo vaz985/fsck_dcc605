@@ -1,7 +1,5 @@
 #include <linux/types.h>
 
-
-
 struct ext2_super_block {
   __le32    s_inodes_count;        /* Inodes count */
   __le32    s_blocks_count;        /* Blocks count */
