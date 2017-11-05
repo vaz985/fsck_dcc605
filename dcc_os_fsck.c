@@ -89,94 +89,65 @@ void multiple_inode( int fd ) {
 
 
 void inode_permission( int fd ) {
+  // Superbloco
   struct ext2_super_block super;
-
   lseek(fd, BASE_OFFSET, SEEK_SET);
   read(fd, &super, sizeof(super));
 
   unsigned int block_size = 1024 << super.s_log_block_size;
-
   unsigned int inodes_per_block = block_size / sizeof(struct ext2_inode);
   unsigned int itable_blocks    = super.s_inodes_per_group / inodes_per_block;
-
   unsigned int group_count      = 1 + (super.s_blocks_count-1) / super.s_blocks_per_group;
 
+  // Group descriptor
   struct ext2_group_desc group[group_count];
   lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
   read(fd, group, sizeof(group));
 
-  unsigned int * ref;
   struct ext2_inode inodes[inodes_per_block];
+
+  //Bitmaps
+  unsigned char *i_bmap;
+  unsigned char *d_bmap;
+  i_bmap = malloc(block_size);
+  d_bmap = malloc(block_size);
+  lseek(fd, BLOCK_OFFSET(group[0].bg_block_bitmap), SEEK_SET);
+  read(fd, d_bmap, block_size);
+  read(fd, i_bmap, block_size);
+
   // Caminho por cada BLOCK GROUP
   for(int n = 0; n < group_count; n++) {
-    ref = calloc( sizeof(unsigned int) , 8192 );
-    
-      //-----
-      //unsigned int inode_bitmap = group[n].bg_inode_bitmap;
-      //unsigned int inode_table  = group[n].bg_inode_table;
-      
-      //unsigned char *bitmap      = malloc(block_size);
-      //unsigned char *block_count = calloc(block_size, sizeof(unsigned char));
-      //lseek(fd, BLOCK_OFFSET(inode_bitmap), SEEK_SET);
-      //read(fd, bitmap, sizeof(bitmap));
-      //-----
-
     // Posicao no comeco da tabela de inodes
     lseek(fd, BLOCK_OFFSET(group[n].bg_inode_table), SEEK_SET);
     for(int i = 0; i < itable_blocks; i++) {
       // Leio 1 block de inodes
       read(fd, inodes, sizeof(inodes));
       for(int j = 0; j < inodes_per_block; j++) {
-        //if((S_ISREG(inodes[j].i_mode) || S_ISDIR(inodes[j].i_mode)) || bitmap[j] != 0){
-        if(S_ISREG(inodes[j].i_mode) || S_ISDIR(inodes[j].i_mode)){
-          printf("inode %d: ", i);
-          // Se não existe nenuma permissão
-          if (inodes[j].i_mode & S_IRUSR)
-            printf("S_IRUSR\n");
-          else if(inodes[j].i_mode & S_IWUSR)  
-            printf("S_IWUSR\n");
-          else if(inodes[j].i_mode & S_IWUSR)  
-            printf("S_IWUSR\n");
-          else if(inodes[j].i_mode & S_IXUSR)  
-            printf("S_IXUSR\n");
-          else if(inodes[j].i_mode & S_IRWXU)  
-            printf("S_IRWXU\n");
-          else if(inodes[j].i_mode & S_IRGRP)  
-            printf("S_IRGRP\n");
-          else if(inodes[j].i_mode & S_IXGRP)  
-            printf("S_IXGRP\n");
-          else if(inodes[j].i_mode & S_IRWXG)  
-            printf("S_IRWXG\n");
-          else if(inodes[j].i_mode & S_IROTH)  
-            printf("S_IROTH\n");
-          else if(inodes[j].i_mode & S_IWOTH)  
-            printf("S_IWOTH\n");
-          else if(inodes[j].i_mode & S_IXOTH)  
-            printf("S_IXOTH\n");
-          else if(inodes[j].i_mode & S_IRWXO)  
-            printf("S_IRWXO\n");
-          else
-            printf("NONE\n");
-
-          if ((inodes[j].i_mode & S_IRUSR
-              || inodes[j].i_mode & S_IWUSR
-              || inodes[j].i_mode & S_IXUSR
-              || inodes[j].i_mode & S_IRWXU
-              || inodes[j].i_mode & S_IRGRP
-              || inodes[j].i_mode & S_IWGRP
-              || inodes[j].i_mode & S_IXGRP
-              || inodes[j].i_mode & S_IRWXG
-              || inodes[j].i_mode & S_IROTH
-              || inodes[j].i_mode & S_IWOTH
-              || inodes[j].i_mode & S_IXOTH
-              || inodes[j].i_mode & S_IRWXO
-            ) == 0){
-            printf("Permissão não encontrada.\n");
-          }
+        unsigned int b_count    = inodes[j].i_blocks;
+        unsigned int * blocks   = inodes[j].i_block;
+        // Se o inode tem algo
+        if( b_count > 0 ) {
+        //if(S_ISREG(inodes[j].i_mode) || S_ISDIR(inodes[j].i_mode)){
+            // Se não existe nenuma permissão
+            if ((inodes[j].i_mode & S_IRUSR
+                || inodes[j].i_mode & S_IWUSR
+                || inodes[j].i_mode & S_IXUSR
+                || inodes[j].i_mode & S_IRWXU
+                || inodes[j].i_mode & S_IRGRP
+                || inodes[j].i_mode & S_IWGRP
+                || inodes[j].i_mode & S_IXGRP
+                || inodes[j].i_mode & S_IRWXG
+                || inodes[j].i_mode & S_IROTH
+                || inodes[j].i_mode & S_IWOTH
+                || inodes[j].i_mode & S_IXOTH
+                || inodes[j].i_mode & S_IRWXO
+              ) == 0){
+              printf("Inode: %d - ", i*8 + j + 1);
+              printf("Permissão não encontrada.\n");
+            }
         }
       }
     }
-    free(ref);
   }
 }
 
