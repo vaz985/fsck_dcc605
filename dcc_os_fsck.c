@@ -60,11 +60,19 @@ void multiple_inode( int fd ) {
   lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
   read(fd, group, sizeof(group));
 
+  unsigned char *i_bmap;
+  unsigned char *d_bmap;
+  i_bmap = malloc(block_size);
+  d_bmap = malloc(block_size);
+  lseek(fd, BLOCK_OFFSET(group[0].bg_block_bitmap), SEEK_SET);
+  read(fd, d_bmap, block_size);
+  read(fd, i_bmap, block_size);
+
   unsigned int * ref;
   struct ext2_inode inodes[inodes_per_block];
   // Caminho por cada BLOCK GROUP
   for(int n = 0; n < group_count; n++) {
-    ref = calloc( sizeof(unsigned int) , 8192 );
+    ref = calloc( sizeof(unsigned char) , 8192 );
     // Posicao no comeco da tabela de inodes
     lseek(fd, BLOCK_OFFSET(group[n].bg_inode_table), SEEK_SET);
     for(int i = 0; i < itable_blocks; i++) {
@@ -72,19 +80,27 @@ void multiple_inode( int fd ) {
       read(fd, inodes, sizeof(inodes));
       for(int j = 0; j < inodes_per_block; j++) {
         unsigned int b_count    = inodes[j].i_blocks;
-        unsigned int * blocks = inodes[j].i_block;
+        unsigned int * blocks   = inodes[j].i_block;
         // Se o inode tem algo
         if( b_count > 0 ) {
+          printf("Inode: %d\n", i*8 + j + 1);
+          printf("Usa os seguintes blocos\n");
           for( int k = 0; k < 12; k++ ) {
             if( blocks[k] == 0 ) {
+              continue;
             }
             else if( ref[blocks[k]] == 0 ) {
               ref[blocks[k]]++;
+              printf("Block %d\n",blocks[k]);
+              //printf("block %d is on: %d\n",blocks[k], bitmapGet( d_bmap[blocks[k]/8], blocks[k] % 8 ) );
             }
             // Bloco com mais de 1 ref
             else {
+              printf("Block %d\n",blocks[k]);
+              //printf("block %d is on: %d\n",blocks[k], bitmapGet( d_bmap[blocks[k]/8], blocks[k] % 8 ) );
               printf("Bloco %d com mais de 1 ref\n",blocks[k]);
             }
+            printf("\n");
           }
         }
       }
