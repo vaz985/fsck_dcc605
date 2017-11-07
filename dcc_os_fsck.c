@@ -104,6 +104,7 @@ void check_inodes( int fd, struct group_block * group, uint itable_blocks, uint 
   }
 }
 
+
 void orphan_inodes( int fd ) {
   struct ext2_super_block super;
   lseek(fd, BASE_OFFSET, SEEK_SET);
@@ -129,7 +130,10 @@ void orphan_inodes( int fd ) {
   char block[block_size];
   struct ext2_dir_entry_2 * entry;
   struct ext2_inode inode;
+  unsigned char inode_count_bmap[block_size];
   for(int n = 0; n < group_count; n++) {
+    for(int i = 0; i < block_size; i++)
+      inode_count_bmap[i] = 0;
     for(int i = 0; i < inodes_per_block*itable_blocks; i++){
       // Lost and found
       if ( i == 10 ) 
@@ -148,7 +152,7 @@ void orphan_inodes( int fd ) {
             entry = (struct ext2_dir_entry_2 *) block;
             uint offset = 0;
             while(offset < inode.i_size) {
-              printf("Inode: %d, Size: %d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, entry->name); 
+              printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, entry->name); 
               offset += entry->rec_len;
               entry = (void *) entry + entry->rec_len;
             }
