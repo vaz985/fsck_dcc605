@@ -126,6 +126,8 @@ void orphan_inodes( int fd ) {
 
   uint dir[ super.s_inodes_per_group * group_count ];
   uint dir_count = 0;
+  char block[block_size];
+  struct ext2_dir_entry_2 * entry;
   struct ext2_inode inode;
   for(int n = 0; n < group_count; n++) {
     for(int i = 0; i < inodes_per_block*itable_blocks; i++){
@@ -141,10 +143,15 @@ void orphan_inodes( int fd ) {
         uint * blocks = inode.i_block;
         for( int b_n = 0; b_n < n_b; b_n++ ){
           if( blocks[b_n] > 0 ) {
-            struct ext2_dir_entry_2 dir;
             lseek( fd, BLOCK_OFFSET( blocks[b_n] ), SEEK_SET );
-            read( fd, &dir, sizeof(struct ext2_dir_entry_2) );
-            
+            read( fd, block, block_size );
+            entry = (struct ext2_dir_entry_2 *) block;
+            uint offset = 0;
+            while(offset < inode.i_size) {
+              printf("Inode: %d, Size: %d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, entry->name); 
+              offset += entry->rec_len;
+              entry = (void *) entry + entry->rec_len;
+            }
           }
         }
       }
@@ -234,8 +241,7 @@ void multiple_inode( int fd ) {
           //  printf("Dir = 2\n");
           //  uint choice;
           //  scanf("%d",&choice);
-
-
+          
           //}
           //printf("Inode bmap: %d\n", bitmapGet( i_bmap[i], blocks[j] ) );
           //printf("Usa os seguintes blocos\n");
