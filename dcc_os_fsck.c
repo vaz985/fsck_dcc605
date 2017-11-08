@@ -92,8 +92,6 @@ void new_fun( int fd ) {
   
   struct group_block * g_block;
   g_block = setup_group_block( fd, 1024, 0 );
-  
-
 
 }
 
