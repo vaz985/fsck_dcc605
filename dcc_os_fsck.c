@@ -21,140 +21,8 @@ uint bitmapGet( char byte, uint pos ) {
   return (byte >> pos) & 1;
 }
 
-uint bitmapSwap( char byte, uint pos) {
-  return (byte ^ (1 << pos) );
-}
-
-// Tornar mais brando o fix do superblock
-void superblock_fix( int fd ){
-  struct ext2_super_block super;
-  lseek(fd, BASE_OFFSET, SEEK_SET);
-  read(fd, &super, sizeof(super));
-  if( super.s_magic == 61267 ) {
-    printf("Superblock OK\n");
-    return;
-  }
-  
-  lseek(fd, 1024*8193, SEEK_SET);
-  read(fd, &super, sizeof(super));
-
-  lseek(fd, BASE_OFFSET, SEEK_SET);
-  write(fd, &super, sizeof(super));
-  
-}
-
-struct group_block{
-  struct ext2_super_block * super;
-  struct ext2_group_desc * group_desc;
-  unsigned char * d_bmap;
-  unsigned char * i_bmap;
-  struct ext2_inode * inodes;
-  void * data_start;
-  void * d;
-};
-
-
-struct group_block * setup_group_block (int fd, uint pos, uint n_group) {
-  struct group_block * gb;
-  gb = malloc( sizeof(struct group_block) );
-  gb->super = malloc( sizeof(struct ext2_super_block) );
-  lseek( fd, pos, SEEK_SET);
-  read(fd, gb->super, sizeof(struct ext2_super_block));
-  
-  uint group_count = (gb->super->s_blocks_count - 1) / gb->super->s_blocks_per_group;
-
-  gb->d = malloc( block_size*gb->super->s_blocks_per_group );
-  lseek( fd, pos, SEEK_SET);
-  read( fd, gb->d, block_size*gb->super->s_blocks_per_group);
-  gb->super      = gb->d;
-  gb->group_desc = gb->d + block_size;
-  gb->d_bmap     = gb->d + gb->group_desc[n_group].bg_block_bitmap*block_size;
-  gb->i_bmap     = gb->d + gb->group_desc[n_group].bg_inode_bitmap*block_size;
-  gb->inodes     = gb->d + gb->group_desc[n_group].bg_inode_table *block_size;
-  gb->data_start = gb->inodes + gb->super->s_inodes_per_group*(sizeof(struct ext2_inode)/block_size);
-
-  return gb;
-}
-
-void new_fun( int fd ) {
-  struct ext2_super_block super;
-
-  lseek(fd, BASE_OFFSET, SEEK_SET);
-  read(fd, &super, sizeof(struct ext2_super_block));
-
-  uint group_count = 1 + (super.s_blocks_count-1) / super.s_blocks_per_group;
-  uint * group_pos = malloc( sizeof(uint) * group_count );
-  uint n_blocks = super.s_blocks_per_group;
-  for(uint i = 0; i < group_count; i++)
-    group_pos[i] = 1 + (i*n_blocks);
-
-  block_size = 1024 << super.s_log_block_size;
-  
-  struct group_block * g_block;
-  g_block = setup_group_block( fd, 1024, 0 );
-
-}
-
-void orphan_inodes( int fd ) {
-  struct ext2_super_block super;
-
-  lseek(fd, BASE_OFFSET, SEEK_SET);
-  read(fd, &super, sizeof(struct ext2_super_block));
-
-  block_size = 1024 << super.s_log_block_size;
-  
-  struct group_block * g_block;
-  g_block = setup_group_block( fd, 1024, 0 );
-
-  uint inodes_per_block = block_size / sizeof(struct ext2_inode);
-  uint itable_blocks    = super.s_inodes_per_group / inodes_per_block;
-  uint group_count      = 1 + (super.s_blocks_count-1) / super.s_blocks_per_group;
-
-  struct ext2_group_desc group[group_count];
-  lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
-  read(fd, group, group_count*sizeof(struct ext2_group_desc));
-
-  struct ext2_inode lost_found;
-  uint lost_found_pos = BLOCK_OFFSET(group[0].bg_inode_table) + 10*sizeof(struct ext2_inode);
-  lseek(fd, lost_found_pos, SEEK_SET);
-  read(fd, &lost_found, sizeof(struct ext2_inode));
-
-  uint dir[ super.s_inodes_per_group * group_count ];
-  uint dir_count = 0;
-  char block[block_size];
-  struct ext2_dir_entry_2 * entry;
-  struct ext2_inode inode;
-  unsigned char inode_count_bmap[block_size];
-  for(int n = 0; n < group_count; n++) {
-    for(int i = 0; i < block_size; i++)
-      inode_count_bmap[i] = 0;
-    for(int i = 0; i < inodes_per_block*itable_blocks; i++){
-      // Lost and found
-      if ( i == 10 ) 
-        continue;
-      lseek( fd, BLOCK_OFFSET(group[n].bg_inode_table) + i*sizeof(struct ext2_inode), SEEK_SET );
-      read( fd, &inode, sizeof(struct ext2_inode) );
-      // EH DIR
-      if ( S_ISDIR( inode.i_mode ) && inode.i_blocks > 0) {
-        printf("DIR Inode: %d\n", i+1);
-        uint n_b    = inode.i_blocks;
-        uint * blocks = inode.i_block;
-        for( int b_n = 0; b_n < n_b; b_n++ ){
-          if( blocks[b_n] > 0 ) {
-            lseek( fd, BLOCK_OFFSET( blocks[b_n] ), SEEK_SET );
-            read( fd, block, block_size );
-            entry = (struct ext2_dir_entry_2 *) block;
-            uint offset = 0;
-            while(offset < inode.i_size) {
-              printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, entry->name); 
-              offset += entry->rec_len;
-              entry = (void *) entry + entry->rec_len;
-            }
-          }
-        }
-      }
-    }
-  }
+unsigned char bitmapSwap( unsigned char byte, uint pos) {
+  return ( byte ^ ( 1 << pos ) );
 }
 
 int inode_type( struct ext2_inode i) {
@@ -185,6 +53,124 @@ int inode_type( struct ext2_inode i) {
   }
   return 1;
 }
+
+// Tornar mais brando o fix do superblock
+void superblock_fix( int fd ){
+  struct ext2_super_block super;
+  lseek(fd, BASE_OFFSET, SEEK_SET);
+  read(fd, &super, sizeof(super));
+  if( super.s_magic == 61267 ) {
+    printf("Superblock OK\n");
+    return;
+  }
+  
+  lseek(fd, 1024*8193, SEEK_SET);
+  read(fd, &super, sizeof(super));
+
+  lseek(fd, BASE_OFFSET, SEEK_SET);
+  write(fd, &super, sizeof(super));
+  
+}
+
+void fix_bad_type( int fd, struct ext2_group_desc * groups, struct ext2_inode * inode, struct ext2_dir_entry_2 * dir ) {
+  uint type = dir->file_type;
+  if( type == 1 ) {
+    inode->i_mode = ( ( inode->i_mode & 0170000 ) | 0100000 );
+  }
+  else if( type == 2 ) {
+    inode->i_mode = ( ( inode->i_mode & 0170000 ) | 0040000 );
+  }
+}
+
+void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * group, struct ext2_inode * root, unsigned char * inode_bmap ) {
+  uint inodes_per_block = block_size / sizeof(struct ext2_inode);
+  unsigned char * block = malloc( block_size );
+  struct ext2_dir_entry_2 * entry;
+  struct ext2_inode * inode;
+
+
+  printf("-------------DIR------------\n");
+  for( int i=0; i<12; i++ ){
+    if( root->i_block[i] == 0 )
+      continue;
+    lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
+    read(fd, block, block_size);
+    entry = (void *) block;
+    uint offset = 0;
+    while( offset < root->i_size ) {
+      char fname[255];
+      memcpy(fname, entry->name, entry->name_len);
+      fname[entry->name_len] = 0;
+      printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, fname); 
+      if( fname[0] != '.' && entry->file_type == 2 ) {
+        lseek( fd, BLOCK_OFFSET(group[(entry->inode-1)/super->s_inodes_per_group].bg_inode_table) + ((entry->inode - 1)*sizeof(struct ext2_inode)), SEEK_SET ); 
+        read( fd, inode, sizeof(struct ext2_inode) );
+        run( fd, super, group, inode, inode_bmap );
+        
+      }
+      offset += entry->rec_len;
+      entry = (void *) entry + entry->rec_len;
+    } 
+  }
+  printf("----------------------------\n");
+}
+
+
+void orphan_inodes( int fd ) {
+  struct ext2_super_block * super = malloc(sizeof(struct ext2_super_block));
+
+  lseek(fd, BASE_OFFSET, SEEK_SET);
+  read(fd, super, sizeof(struct ext2_super_block));
+
+  block_size = 1024 << super->s_log_block_size;
+
+  uint inodes_per_block = block_size / sizeof(struct ext2_inode);
+  uint itable_blocks    = super->s_inodes_per_group / inodes_per_block;
+  uint group_count      = 1 + (super->s_blocks_count-1) / super->s_blocks_per_group;
+
+  struct ext2_group_desc * group = malloc(sizeof(struct ext2_group_desc)*group_count);
+  lseek(fd, BASE_OFFSET + block_size, SEEK_SET);
+  read(fd, group, group_count*sizeof(struct ext2_group_desc));
+
+  struct ext2_inode * root = malloc(sizeof(struct ext2_inode));
+  lseek(fd, BLOCK_OFFSET( group[0].bg_inode_table ) + sizeof(struct ext2_inode), SEEK_SET);
+  read(fd, root, sizeof(struct ext2_inode));
+  
+  unsigned char * block = malloc( block_size );
+  struct ext2_dir_entry_2 * entry;
+
+  struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
+
+  unsigned char * block_bmap = malloc( block_size * group_count );
+  unsigned char * inode_bmap = malloc( block_size * group_count );
+
+  for( int i=0; i<12; i++ ){
+    if( root->i_block[i] == 0 )
+      continue;
+    lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
+    read(fd, block, block_size);
+    entry = (void *) block;
+    uint offset = 0;
+    while( offset < root->i_size ) {
+      char fname[255];
+      memcpy(fname, entry->name, entry->name_len);
+      fname[entry->name_len] = 0;
+      printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, fname); 
+      if( fname[0] != '.' && entry->file_type == 2 && entry->inode != 11 ) {
+        uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
+        uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
+
+        lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
+        read( fd, inode, sizeof(struct ext2_inode) );
+        run( fd, super, group, inode, inode_bmap ); 
+      }
+      offset += entry->rec_len;
+      entry = (void *) entry + entry->rec_len;
+    } 
+  }
+
+}
+
 
 void multiple_inode( int fd ) {
   struct ext2_super_block super;
@@ -280,8 +266,8 @@ int main(int agrc, const char * argv[]) {
   superblock_fix( fd );
 
   //multiple_inode( fd );
-  new_fun( fd );
-  //orphan_inodes( fd );
+  //new_fun( fd );
+  orphan_inodes( fd );
 
   return 0;
 }
