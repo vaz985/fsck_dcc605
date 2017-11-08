@@ -103,9 +103,11 @@ void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * grou
       fname[entry->name_len] = 0;
       printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, fname); 
       if( fname[0] != '.' && entry->file_type == 2 ) {
-        lseek( fd, BLOCK_OFFSET(group[(entry->inode-1)/super->s_inodes_per_group].bg_inode_table) + ((entry->inode - 1)*sizeof(struct ext2_inode)), SEEK_SET ); 
+        uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
+        uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
+        lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
-        run( fd, super, group, inode, inode_bmap );
+        run( fd, super, group, inode, inode_bmap ); 
         
       }
       offset += entry->rec_len;
@@ -159,7 +161,6 @@ void orphan_inodes( int fd ) {
       if( fname[0] != '.' && entry->file_type == 2 && entry->inode != 11 ) {
         uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
         uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
-
         lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
         run( fd, super, group, inode, inode_bmap ); 
