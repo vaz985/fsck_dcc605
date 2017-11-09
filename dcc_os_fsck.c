@@ -96,7 +96,6 @@ void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * grou
   struct ext2_dir_entry_2 * entry;
   struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
 
-
   printf("-------------DIR------------\n");
   if( all_zero_blocks( root->i_block ) )
   {
@@ -108,10 +107,22 @@ void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * grou
   {
     if( root->i_block[i] == 0 )
       continue;
+    // DUPLICATE BLOCK
+    uint inode_block = root->i_block[i] / inodes_per_block;  
+    uint offset      = root->i_block[i] % inodes_per_block;
+    // Duplicado
+    if( bitmapGet(data_bmap[ inode_block ], offset ) ){
+      printf("---Bloco_Duplicado---\n");
+      return;
+    }
+    else {
+      data_bmap[inode_block] = bitmapSwap( data_bmap[ inode_block ], offset );
+    }
+    //////////////////
     lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
     read(fd, block, block_size);
     entry = (void *) block;
-    uint offset = 0;
+    offset = 0;
     while( offset < root->i_size ) 
     {
       char fname[255];
@@ -134,8 +145,25 @@ void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * grou
   printf("----------------------------\n");
 }
 
+void check_dup_files( int fd, struct ext2_inode *root, struct ext2_group_desc * group, struct ext2_inode * inode, uint n_inode, char * data_bmap)
+{
+  uint inodes_per_block = block_size / sizeof(struct ext2_inode);
+  uint inode_block; 
+  uint offset; 
+  for( uint i = 0; i < 15; i++ ) {
+    inode_block = inode->i_block[i] / inodes_per_block;
+    offset      = inode->i_block[i] % inodes_per_block;
+    if( bitmapGet( data_bmap[inode_block], offset ) ) {
+      printf("Repetido\n");
+    }
+    else{
+      data_bmap[inode_block] = bitmapSwap( data_bmap[inode_block], offset );
+    }
+  }
+}
 
-void orphan_inodes( int fd ) {
+
+void start_cleaning( int fd ) {
   struct ext2_super_block * super = malloc(sizeof(struct ext2_super_block));
 
   lseek(fd, BASE_OFFSET, SEEK_SET);
@@ -160,16 +188,20 @@ void orphan_inodes( int fd ) {
 
   struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
 
-  unsigned char * data_bmap = malloc( block_size * group_count );
-  unsigned char * inode_bmap = malloc( block_size * group_count );
+  unsigned char * data_bmap = calloc( block_size , group_count );
+  unsigned char * inode_bmap = calloc( block_size , group_count );
 
   for( int i=0; i<12; i++ ){
     if( root->i_block[i] == 0 )
       continue;
+    // DUPLICATE BLOCK
+    uint inode_block = root->i_block[i] / inodes_per_block;  
+    uint offset      = root->i_block[i] % inodes_per_block;
+
     lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
     read(fd, block, block_size);
     entry = (void *) block;
-    uint offset = 0;
+    offset = 0;
     while( offset < root->i_size ) {
       char fname[255];
       memcpy(fname, entry->name, entry->name_len);
@@ -182,6 +214,13 @@ void orphan_inodes( int fd ) {
         read( fd, inode, sizeof(struct ext2_inode) );
         run( fd, super, group, inode, inode_bmap, data_bmap); 
       }
+      else {
+        uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
+        uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
+        lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
+        read( fd, inode, sizeof(struct ext2_inode) );
+        check_dup_files( fd, root, group, inode, entry->inode, data_bmap );
+      }
       offset += entry->rec_len;
       entry = (void *) entry + entry->rec_len;
     } 
@@ -189,7 +228,7 @@ void orphan_inodes( int fd ) {
 
 }
 
-
+// Shit Try
 void multiple_inode( int fd ) {
   struct ext2_super_block super;
 
@@ -256,8 +295,7 @@ void multiple_inode( int fd ) {
               printf("Block %d\n",blocks[k]);
               //printf("Block %d is on: %d\n",blocks[k], bitmapGet( d_bmap[blocks[k]/8], blocks[k] % 8 ) );
             }
-            // Bloco com mais de 1 ref
-            // Remover inode
+            // Bloco com mais de 1 ref // Remover inode
             else {
               struct ext2_inode * zero = malloc( sizeof(struct ext2_inode) );
               memset(zero, 0, sizeof(struct ext2_inode));
@@ -277,15 +315,19 @@ void multiple_inode( int fd ) {
 
 }
 
-int main(int agrc, const char * argv[]) {
+int main(int agrc, const char * argv[])
+{
   int fd;
   fd = open(argv[1], O_RDWR);
 
+  printf("----------SUPERBLOCK CHECK--------\n");
   superblock_fix( fd );
+  printf("----------------------------------\n");
 
   //multiple_inode( fd );
-  //new_fun( fd );
-  orphan_inodes( fd );
+  printf("----------CLEANING ERROS----------\n");
+  start_cleaning( fd );
+  printf("-------------END------------------\n");
 
   return 0;
 }
