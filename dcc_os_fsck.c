@@ -145,16 +145,60 @@ void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * grou
   printf("----------------------------\n");
 }
 
-void check_dup_files( int fd, struct ext2_inode *root, struct ext2_group_desc * group, struct ext2_inode * inode, uint n_inode, char * data_bmap)
+// O MESMO INODE PODE TER BLOCOS REPETIDOS
+void check_dup_blocks( int fd, struct ext2_inode *root, struct ext2_group_desc * group, struct ext2_inode * inode, uint n_inode, char * data_bmap, char * inode_bmap)
 {
+  struct ext2_super_block super;
+  lseek( fd, 1024, SEEK_SET );
+  read( fd, &super, sizeof(struct ext2_super_block) );
+  if( n_inode == 2 )
+    return;
   uint inodes_per_block = block_size / sizeof(struct ext2_inode);
   uint inode_block; 
   uint offset; 
-  for( uint i = 0; i < 15; i++ ) {
+  unsigned char * block = malloc( block_size );
+  struct ext2_dir_entry_2 * entry;
+  for( uint i = 0; i < 12; i++ ) {
+    if( inode->i_block[i] == 0 )
+      continue;
     inode_block = inode->i_block[i] / inodes_per_block;
     offset      = inode->i_block[i] % inodes_per_block;
     if( bitmapGet( data_bmap[inode_block], offset ) ) {
-      printf("Repetido\n");
+      printf("Bloco %d repetido\n", inode->i_block[i]);
+      struct ext2_inode dir_inode;
+      struct ext2_dir_entry_2 * new_block = malloc(sizeof(struct ext2_dir_entry_2));
+    //inode_block =  (n_inode-1) / super.s_inodes_per_group;
+    //offset      = ((n_inode-1) % super.s_inodes_per_group) * sizeof(struct ext2_inode);
+      for( uint j = 0; j < 12; j++ ) {
+        if( root->i_block[j] != 0 ) {
+          lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
+          read(fd, block, block_size);
+          entry = (void *) block;
+          offset = 0;
+          while( offset < root->i_size ) {
+            char fname[255];
+            memcpy(fname, entry->name, entry->name_len);
+            fname[entry->name_len] = 0;
+            if( entry->inode == n_inode ) {
+              inode_block = (n_inode - 1)/inodes_per_block;
+              uint i_off = (n_inode - 1) % inodes_per_block;
+              struct ext2_dir_entry_2 ** new_dir = malloc(sizeof(struct ext2_dir_entry_2 *) * (block_size)/65 );
+              
+              memcpy( block + offset, block+offset+entry->rec_len, block_size - (offset+entry->rec_len) );
+              inode_bmap[ inode_block ] = bitmapSwap( inode_bmap[ inode_block ], i_off ); 
+              lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
+              write(fd, block, block_size);
+              lseek(fd, BLOCK_OFFSET( group[(n_inode-1)/super.s_inodes_per_group].bg_inode_bitmap ) + (8*(inode_block)), SEEK_SET);
+              write(fd, &inode_bmap[ inode_block ], 8);
+              free(new_dir);
+              return;
+            } 
+            offset += entry->rec_len;
+            entry = (void *) entry + entry->rec_len;
+          }
+        }
+      }
+      printf("Inode Removido\n");
     }
     else{
       data_bmap[inode_block] = bitmapSwap( data_bmap[inode_block], offset );
@@ -208,7 +252,7 @@ void start_cleaning( int fd ) {
       fname[entry->name_len] = 0;
       printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, fname); 
       if( fname[0] != '.' && entry->file_type == 2 && entry->inode != 11 ) {
-        uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
+        uint group_id     = (entry->inode - 1) / (super->s_inodes_per_group);
         uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
         lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
@@ -219,7 +263,7 @@ void start_cleaning( int fd ) {
         uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
         lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
-        check_dup_files( fd, root, group, inode, entry->inode, data_bmap );
+        check_dup_blocks( fd, root, group, inode, entry->inode, data_bmap, inode_bmap );
       }
       offset += entry->rec_len;
       entry = (void *) entry + entry->rec_len;
