@@ -82,32 +82,49 @@ void fix_bad_type( int fd, struct ext2_group_desc * groups, struct ext2_inode * 
   }
 }
 
-void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * group, struct ext2_inode * root, unsigned char * inode_bmap ) {
+uint all_zero_blocks( uint * blocks ) {
+  for( uint i = 0; i < 15; i++ )
+    if( blocks[i] > 0 )
+      return 0;
+  return 1;
+}
+
+void run( int fd, struct ext2_super_block * super, struct ext2_group_desc * group, struct ext2_inode * root, unsigned char * inode_bmap, unsigned char * data_bmap) 
+{
   uint inodes_per_block = block_size / sizeof(struct ext2_inode);
   unsigned char * block = malloc( block_size );
   struct ext2_dir_entry_2 * entry;
-  struct ext2_inode * inode;
+  struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
 
 
   printf("-------------DIR------------\n");
-  for( int i=0; i<12; i++ ){
+  if( all_zero_blocks( root->i_block ) )
+  {
+    printf("---------EMPTY DIR----------\n");
+    printf("----------------------------\n");
+    return;
+  }
+  for( int i=0; i<12; i++ )
+  {
     if( root->i_block[i] == 0 )
       continue;
     lseek(fd, BLOCK_OFFSET( root->i_block[i] ), SEEK_SET);
     read(fd, block, block_size);
     entry = (void *) block;
     uint offset = 0;
-    while( offset < root->i_size ) {
+    while( offset < root->i_size ) 
+    {
       char fname[255];
       memcpy(fname, entry->name, entry->name_len);
       fname[entry->name_len] = 0;
       printf("Inode: %4.d, Size: %4.d, Type: %d, Name: %s\n", entry->inode, entry->rec_len, entry->file_type, fname); 
-      if( fname[0] != '.' && entry->file_type == 2 ) {
+      if( fname[0] != '.' && entry->file_type == 2 )
+      {
         uint group_id = (entry->inode - 1)/(super->s_inodes_per_group);
         uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
         lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
-        run( fd, super, group, inode, inode_bmap ); 
+        run( fd, super, group, inode, inode_bmap, data_bmap ); 
         
       }
       offset += entry->rec_len;
@@ -143,7 +160,7 @@ void orphan_inodes( int fd ) {
 
   struct ext2_inode * inode = malloc(sizeof(struct ext2_inode));
 
-  unsigned char * block_bmap = malloc( block_size * group_count );
+  unsigned char * data_bmap = malloc( block_size * group_count );
   unsigned char * inode_bmap = malloc( block_size * group_count );
 
   for( int i=0; i<12; i++ ){
@@ -163,7 +180,7 @@ void orphan_inodes( int fd ) {
         uint inode_offset = ((entry->inode - 1) % super->s_inodes_per_group)*sizeof(struct ext2_inode);
         lseek( fd, BLOCK_OFFSET(group[group_id].bg_inode_table) + inode_offset, SEEK_SET ); 
         read( fd, inode, sizeof(struct ext2_inode) );
-        run( fd, super, group, inode, inode_bmap ); 
+        run( fd, super, group, inode, inode_bmap, data_bmap); 
       }
       offset += entry->rec_len;
       entry = (void *) entry + entry->rec_len;
