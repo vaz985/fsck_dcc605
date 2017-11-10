@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include <linux/fs.h> 
+#include <linux/fs.h>
 #include "ext2.h"
 
 #define BASE_OFFSET 1024
@@ -38,7 +38,7 @@ void superblock_fix( int fd ){
       printf("Superblock reparado com sucesso.\n");
     }
   }
-  
+
 }
 
 //static void read_inode( int fd, int inode_no, const ext2_group_desc * group, struct ext2_inode * inode) {
@@ -46,7 +46,7 @@ void superblock_fix( int fd ){
 //
 //  lseek(fd, BLOCK_OFFSET(group->bg_inode_table) + (inode_no)*sizeof(struct ext2_inode), SEEK_SET);
 //  read(fd, inode, sizeof(struct ext2_inode));
-//  
+//
 //}
 
 void multiple_inode( int fd ) {
@@ -71,7 +71,7 @@ void multiple_inode( int fd ) {
 
   unsigned int inode_bitmap = group.bg_inode_bitmap;
   unsigned int inode_table  = group.bg_inode_table;
-  
+
   unsigned char *bitmap      = malloc(block_size);
   unsigned char *block_count = calloc(block_size, sizeof(unsigned char));
 
@@ -127,6 +127,7 @@ void inode_permission( int fd ) {
     lseek(fd, BLOCK_OFFSET(group[n].bg_inode_table), SEEK_SET);
     for(int i = 0; i < itable_blocks; i++) {
       // Leio 1 block de inodes
+      lseek(fd, BLOCK_OFFSET(group[n].bg_inode_table+i), SEEK_SET);
       read(fd, inodes, sizeof(inodes));
       for(int j = 0; j < inodes_per_block; j++) {
         unsigned int b_count    = inodes[j].i_blocks;
@@ -148,10 +149,13 @@ void inode_permission( int fd ) {
                 || inodes[j].i_mode & S_IXOTH
                 || inodes[j].i_mode & S_IRWXO
               ) == 0){
-              printf("Permissão não encontrada para inode %d. Insira o valor: ", i*8 + j + 1);
-              int permission_value;
-              scanf("%d", &permission_value);
-              // Descobrir como seta a permissão
+                // Descobrir como seta a permissão
+                printf("Permissão não encontrada para inode %d. ", i*8 + j + 1);
+                inodes[j].i_mode = 0x8100;
+                if(inodes[j].i_mode & S_IRUSR)
+                    printf("Permissão atualizada - S_IRUSR (user read)\n");
+                lseek(fd, BLOCK_OFFSET(group[n].bg_inode_table + i) + ((j)*sizeof(struct ext2_inode)), SEEK_SET);
+                write(fd, &inodes[j], sizeof(struct ext2_inode));
             }
         }
       }
