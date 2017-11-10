@@ -126,3 +126,18 @@ struct ext2_inode {
   } osd2;       /* OS dependent 2 */
 };
 
+#define EXT2_NDIR_BLOCKS  12
+#define EXT2_IND_BLOCK    EXT2_NDIR_BLOCKS
+#define EXT2_DIND_BLOCK   (EXT2_IND_BLOCK + 1)
+#define EXT2_TIND_BLOCK   (EXT2_DIND_BLOCK + 1)
+#define EXT2_N_BLOCKS     (EXT2_TIND_BLOCK + 1)
+
+#define EXT2_NAME_LEN 255
+
+struct ext2_dir_entry_2{
+  __u32 inode;      /* Inode number */
+  __u16 rec_len;    /* Directory entry length */
+  __u8  name_len;   /* Name length */
+  __u8  file_type;
+  char  name[EXT2_NAME_LEN];  /* File name */
+};

@@ -1,7 +1,2 @@
-1. Attack the superblock
-  Tentar chegar no superbloco do proximo block group, copia-lo no do grupo 0
-2. Block with more than one inode
-
-3. Corrupt permission
-
-4. Orphan inodes
+Remover bloco no run esta dando problema
+  Melhorar sistema de re escrever o bloco do diretorio
