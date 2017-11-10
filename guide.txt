@@ -1,1 +1,2 @@
 Remover bloco no run esta dando problema
+  Melhorar sistema de re escrever o bloco do diretorio

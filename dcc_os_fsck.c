@@ -95,6 +95,11 @@ void rm_inode_from_dir( unsigned char * block, uint i_pos, uint inode ) {
   uint offset = 0;
   __u16 acc = 0;
   while( offset < block_size ) {
+    if( entry->inode == inode ) {
+      acc += entry->rec_len;
+      entry = (void *) entry + entry->rec_len;
+      continue;
+    }
     if( entry->rec_len + offset + acc == block_size ) {
       __u16 rec_len = (__u16)( entry->rec_len + acc );
       memcpy( &entry->rec_len, &rec_len, 2 );
@@ -102,11 +107,7 @@ void rm_inode_from_dir( unsigned char * block, uint i_pos, uint inode ) {
       memcpy((void*) block, (void*)new_b, block_size);
       return;
     }
-    if( entry->inode == inode ) {
-      acc += entry->rec_len;
-      entry = (void *) entry + entry->rec_len;
-      continue;
-    }
+    
     memcpy( (void*)new_b + offset, entry, entry->rec_len );  
     offset += entry->rec_len;
     entry = (void *) entry + entry->rec_len;
