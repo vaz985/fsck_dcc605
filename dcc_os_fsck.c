@@ -90,26 +90,36 @@ uint all_zero_blocks( uint * blocks ) {
 }
 void rm_inode_from_dir( unsigned char * block, uint i_pos, uint inode ) {
   struct ext2_dir_entry_2 * entry;
+  struct ext2_dir_entry_2 * last_entry;
   entry = (void *) block;
   unsigned char * new_b = malloc(sizeof(block_size));
   uint offset = 0;
   __u16 acc = 0;
+  
   while( offset < block_size ) {
-    if( entry->inode == inode ) {
-      acc += entry->rec_len;
-      entry = (void *) entry + entry->rec_len;
-      continue;
-    }
     if( entry->rec_len + offset + acc == block_size ) {
+      if( entry->inode == inode ) {
+        __u16 last_rec = last_entry->rec_len;
+        __u16 rec_len = (__u16)( last_entry->rec_len + entry->rec_len );
+        memcpy( &last_entry->rec_len, &rec_len, 2 );
+        memcpy( new_b + offset - last_rec , last_entry, 64+last_entry->name_len);
+        memcpy((void*) block, (void*)new_b, block_size);
+        return;
+      }
       __u16 rec_len = (__u16)( entry->rec_len + acc );
       memcpy( &entry->rec_len, &rec_len, 2 );
       memcpy( new_b + offset, entry, 64+entry->name_len);
       memcpy((void*) block, (void*)new_b, block_size);
       return;
     }
-    
+    if( entry->inode == inode ) {
+      acc += entry->rec_len;
+      entry = (void *) entry + entry->rec_len;
+      continue;
+    }
     memcpy( (void*)new_b + offset, entry, entry->rec_len );  
     offset += entry->rec_len;
+    last_entry = entry;
     entry = (void *) entry + entry->rec_len;
   }
 }
