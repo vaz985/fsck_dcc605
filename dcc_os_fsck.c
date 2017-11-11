@@ -68,18 +68,6 @@ void superblock_fix( int fd ){
   if( super.s_magic == 61267 ) {
     printf("Superblock OK\n");
     return;
-  }else{
-    char option;
-    printf("Superblock corrompido. Reparar? (y/n):");
-    scanf("%c", &option);
-    if(option == 'y'){
-      lseek(fd, 1024*8193, SEEK_SET);
-      read(fd, &super, sizeof(super));
-
-      lseek(fd, BASE_OFFSET, SEEK_SET);
-      write(fd, &super, sizeof(super));
-      printf("Superblock reparado com sucesso.\n");
-    }
   }
 
   lseek(fd, 1024*8193, SEEK_SET);
@@ -425,7 +413,6 @@ void inode_permission( int fd ) {
                 || inodes[j].i_mode & S_IXOTH
                 || inodes[j].i_mode & S_IRWXO
               ) == 0){
-                // Descobrir como seta a permissão
                 printf("Permissão não encontrada para inode %d. ", i*8 + j + 1);
                 inodes[j].i_mode = 0x8100;
                 if(inodes[j].i_mode & S_IRUSR)
